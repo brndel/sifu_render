@@ -1,13 +1,17 @@
-mod raw_field;
+mod repeated_raw_field;
 mod raw_value;
-mod util;
+mod parse;
 mod quotes;
+mod util;
+mod raw_rust_type;
+mod wgsl_type_str;
+mod get_ident;
 
 
 use proc_macro::TokenStream;
 use quotes::{mesh_instance::instance_quote, uniform::uniform_quote, vertex::vertex_quote};
 use syn::{DeriveInput, parse_macro_input};
-use util::ParsedStruct;
+use parse::ParsedStruct;
 
 #[proc_macro_derive(Vertex, attributes(raw))]
 pub fn derive_vertex(input: TokenStream) -> TokenStream {

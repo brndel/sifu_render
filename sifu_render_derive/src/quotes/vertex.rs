@@ -3,13 +3,12 @@ use quote::quote;
 use syn::Ident;
 
 use crate::{
-    raw_field::{RawField, RepeatedRawField},
-    util::ParsedStruct,
+    parse::{ParsedStruct, RawField}, repeated_raw_field::RepeatedRawField, raw_value::{rust_scalar::RustScalar, wgsl_type::WgslType}
 };
 
 use super::shared::{raw_struct_quote, shader_struct_format_quote, vertex_attributes_quote};
 
-pub fn vertex_quote(input: ParsedStruct) -> syn::Result<TokenStream> {
+pub fn vertex_quote(input: ParsedStruct<RustScalar>) -> syn::Result<TokenStream> {
     let raw_ident = input.raw_ident();
 
     let raw_struct = raw_struct_quote(&input.ident, &raw_ident, &input.fields);
@@ -27,7 +26,7 @@ pub fn vertex_quote(input: ParsedStruct) -> syn::Result<TokenStream> {
 fn impl_vertex_quote(
     ident: &Ident,
     raw_ident: &Ident,
-    fields: &[RawField],
+    fields: &[RawField<WgslType<RustScalar>>],
 ) -> syn::Result<TokenStream> {
     let repeated_fields = RepeatedRawField::iter(fields.iter());
 

@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use cgmath::{Matrix4, Vector2, Vector3, Vector4};
+use cgmath::{Matrix2, Matrix3, Matrix4, Vector2, Vector3, Vector4};
 use wgpu::{
     BufferAddress, BufferSize, VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode,
     vertex_attr_array,
@@ -76,14 +76,17 @@ pub struct SampleDeriveVertex {
 #[vertex(SampleDeriveVertex)]
 pub struct SampleDeriveInstance {
     #[raw(f32; 4; 4)]
-    mat: Matrix4<f32>
+    mat: Matrix4<f32>,
 }
 
 
 #[derive(Uniform)]
 pub struct SampleDeriveUniform {
+    value: f32,
     #[raw(f32; 3)]
     color: Vector3<f32>,
     #[raw(u32; 2)]
-    thing: Vector2<u32>
+    thing: Vector2<u32>,
+    #[raw(f32; 2; 2)]
+    matrix: Matrix2<f32>,
 }
