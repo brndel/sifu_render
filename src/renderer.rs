@@ -1,6 +1,6 @@
-use std::marker::PhantomData;
+use std::{borrow::Cow, marker::PhantomData};
 
-use wgpu::{CommandEncoder, Device, RenderPass, RenderPassDescriptor, RenderPipelineDescriptor, VertexState};
+use wgpu::{CommandEncoder, Device, FragmentState, RenderPass, RenderPassDescriptor, RenderPipelineDescriptor, ShaderModel, ShaderModuleDescriptor, VertexState};
 
 pub struct Renderer<'a> {
     encoder: &'a mut CommandEncoder,
@@ -36,19 +36,30 @@ impl<'a> Renderer<'a> {
 
 impl<'a, R: Render> Pass<'a, R> {
     fn set_pipeline(&self, device: &Device) {
+
+        let shader_module = device.create_shader_module(ShaderModuleDescriptor {
+            label: Some("<wgsl source code>"),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed("hey")),
+        });
+
         let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: todo!(),
+            label: Some("test render pipeline"),
             layout: todo!(),
             vertex: VertexState {
-                module: todo!(),
+                module: &shader_module,
                 entry_point: Some("vertex"),
-                compilation_options: todo!(),
+                compilation_options: Default::default(),
                 buffers: todo!(),
             },
             primitive: todo!(),
             depth_stencil: todo!(),
             multisample: todo!(),
-            fragment: todo!(),
+            fragment: Some(FragmentState {
+                module: &shader_module,
+                entry_point: Some("fragment"),
+                compilation_options: Default::default(),
+                targets: todo!(),
+            }),
             multiview: todo!(),
             cache: todo!(),
         });

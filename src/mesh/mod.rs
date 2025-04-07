@@ -2,6 +2,8 @@ mod mesh;
 mod vertex;
 mod mesh_instance;
 
+pub use mesh::Mesh;
+
 pub use sifu_render_derive::Vertex;
 pub use vertex::Vertex;
 pub use sifu_render_derive::MeshInstance;

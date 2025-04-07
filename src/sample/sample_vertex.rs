@@ -1,31 +1,29 @@
-use bytemuck::{Pod, Zeroable};
-use cgmath::{Matrix2, Matrix3, Matrix4, Vector2, Vector3, Vector4};
+use cgmath::{Matrix4, Vector3, Vector4};
 use wgpu::{
-    BufferAddress, BufferSize, VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode,
-    vertex_attr_array,
+    BufferAddress, Device, VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode,
 };
 
-use crate::mesh::{MeshInstance, Vertex};
+use crate::mesh::{Mesh, MeshInstance, Vertex};
 
 use crate::Uniform;
 use crate::{self as sifu_render};
 
-pub struct SampleVertex {
+pub struct SampleManualVertex {
     position: Vector3<f32>,
     color: Vector4<f32>,
 }
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
-pub struct SampleRawVertex {
+pub struct SampleManualRawVertex {
     position: [f32; 3],
     color: [f32; 4],
 }
 
-impl Vertex for SampleVertex {
-    type Raw = SampleRawVertex;
+impl Vertex for SampleManualVertex {
+    type Raw = SampleManualRawVertex;
     const LAYOUT: VertexBufferLayout<'static> = VertexBufferLayout {
-        array_stride: core::mem::size_of::<SampleRawVertex>() as BufferAddress,
+        array_stride: core::mem::size_of::<SampleManualRawVertex>() as BufferAddress,
         step_mode: VertexStepMode::Vertex,
         attributes: &[
             VertexAttribute {
@@ -51,8 +49,8 @@ impl Vertex for SampleVertex {
     }
 }
 
-impl From<SampleVertex> for SampleRawVertex {
-    fn from(value: SampleVertex) -> Self {
+impl From<SampleManualVertex> for SampleManualRawVertex {
+    fn from(value: SampleManualVertex) -> Self {
         Self {
             position: value.position.into(),
             color: value.color.into(),
@@ -60,33 +58,75 @@ impl From<SampleVertex> for SampleRawVertex {
     }
 }
 
-
 #[derive(Vertex)]
-pub struct SampleDeriveVertex {
+pub struct SampleVertex {
     #[raw(f32; 3)]
-    position: Vector3<f32>,
-    #[raw(f32; 4)]
-    color: Vector4<f32>,
-    #[raw(f32; 4; 4)]
-    mat: Matrix4<f32>,
+    pub position: Vector3<f32>,
+    #[raw(f32; 3)]
+    pub color: Vector3<f32>,
 }
-
 
 #[derive(MeshInstance)]
-#[vertex(SampleDeriveVertex)]
-pub struct SampleDeriveInstance {
+#[vertex(SampleVertex)]
+pub struct SampleInstance {
     #[raw(f32; 4; 4)]
-    mat: Matrix4<f32>,
+    pub mat: Matrix4<f32>,
 }
 
-
 #[derive(Uniform)]
-pub struct SampleDeriveUniform {
-    value: f32,
+pub struct SampleUniform {
+    pub value: f32,
     #[raw(f32; 3)]
-    color: Vector3<f32>,
-    #[raw(u32; 2)]
-    thing: Vector2<u32>,
-    #[raw(f32; 2; 2)]
-    matrix: Matrix2<f32>,
+    pub color: Vector3<f32>,
+    // #[raw(u32; 2)]
+    // pub thing: Vector2<u32>,
+    // #[raw(f32; 2; 2)]
+    // pub matrix: Matrix2<f32>,
+}
+
+impl SampleVertex {
+    pub fn sample_mesh(device: &Device) -> Mesh<Self> {
+        let vertices = vec![
+            Self {
+                position: Vector3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                color: Vector3 {
+                    x: 1.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            },
+            Self {
+                position: Vector3 {
+                    x: 1.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                color: Vector3 {
+                    x: 0.0,
+                    y: 1.0,
+                    z: 0.0,
+                },
+            },
+            Self {
+                position: Vector3 {
+                    x: 0.0,
+                    y: 1.0,
+                    z: 0.0,
+                },
+                color: Vector3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 1.0,
+                },
+            },
+        ];
+
+        let indices = vec![[0, 1, 2]];
+
+        Mesh::new(device, vertices, indices)
+    }
 }
