@@ -10,13 +10,12 @@ pub mod uniform_binding;
 
 pub use uniform::Uniform;
 
-// pub use renderer::Renderer;
-
 pub use gpu_buffer::GpuBuffer;
 pub use gpu_buffer::IndexBuffer;
+pub use gpu_buffer::InstanceBuffer;
 pub use gpu_buffer::UniformBuffer;
 pub use gpu_buffer::UniformExt;
 pub use gpu_buffer::VertexBuffer;
-pub use gpu_buffer::InstanceBuffer;
 
 pub use bytemuck;
+pub use cgmath;
