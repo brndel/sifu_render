@@ -15,6 +15,7 @@ pub struct SampleManualVertex {
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
+#[bytemuck(crate = "sifu_render::bytemuck")]
 pub struct SampleManualRawVertex {
     position: [f32; 3],
     color: [f32; 4],
@@ -75,9 +76,11 @@ pub struct SampleInstance {
 
 #[derive(Uniform)]
 pub struct SampleUniform {
-    pub value: f32,
+    pub opacity: f32,
     #[raw(f32; 3)]
-    pub color: Vector3<f32>,
+    pub color_a: Vector3<f32>,
+    #[raw(f32; 3)]
+    pub color_b: Vector3<f32>,
     // #[raw(u32; 2)]
     // pub thing: Vector2<u32>,
     // #[raw(f32; 2; 2)]
@@ -87,45 +90,35 @@ pub struct SampleUniform {
 impl SampleVertex {
     pub fn sample_mesh(device: &Device) -> Mesh<Self> {
         let vertices = vec![
+            // 1
             Self {
-                position: Vector3 {
-                    x: 0.0,
-                    y: 0.0,
-                    z: 0.0,
-                },
-                color: Vector3 {
-                    x: 1.0,
-                    y: 0.0,
-                    z: 0.0,
-                },
+                position: Vector3::new(-1.0, -1.0, 0.5),
+                color: Vector3::new(0.0, 0.0, 1.0),
             },
             Self {
-                position: Vector3 {
-                    x: 1.0,
-                    y: 0.0,
-                    z: 0.0,
-                },
-                color: Vector3 {
-                    x: 0.0,
-                    y: 1.0,
-                    z: 0.0,
-                },
+                position: Vector3::new(1.0, 0.0, 0.5),
+                color: Vector3::new(1.0, 0.0, 0.0),
             },
             Self {
-                position: Vector3 {
-                    x: 0.0,
-                    y: 1.0,
-                    z: 0.0,
-                },
-                color: Vector3 {
-                    x: 0.0,
-                    y: 0.0,
-                    z: 1.0,
-                },
+                position: Vector3::new(0.0, 1.0, 0.5),
+                color: Vector3::new(0.0, 1.0, 0.0),
+            },
+            // 2
+            Self {
+                position: Vector3::new(0.5, 0.0, 1.0),
+                color: Vector3::new(0.0, 0.0, 0.5),
+            },
+            Self {
+                position: Vector3::new(0.8, 0.2, 0.0),
+                color: Vector3::new(0.5, 0.0, 0.0),
+            },
+            Self {
+                position: Vector3::new(0.0, -1.0, 0.0),
+                color: Vector3::new(0.0, 0.5, 0.0),
             },
         ];
 
-        let indices = vec![[0, 1, 2]];
+        let indices = vec![[0, 1, 2], [4, 3, 5]];
 
         Mesh::new(device, vertices, indices)
     }

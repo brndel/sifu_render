@@ -1,19 +1,32 @@
-use std::sync::Arc;
+#![allow(unused)]
 
-use cgmath::{Matrix4, SquareMatrix, Vector3};
+use std::{sync::Arc, time::Instant};
+
+use cgmath::{Basis3, Deg, Matrix4, One, Vector2, Vector3};
+use sifu_render::shader::Shader;
+use sifu_render::UniformExt;
 use sifu_render::{
     GpuBuffer,
-    mesh::{MeshInstance, Vertex},
     sample::{
+        camera_uniform::{Camera, FooUniformsDerive},
         sample_shader,
         sample_vertex::{SampleInstance, SampleUniform, SampleVertex},
     },
+    texture::{Color, DepthStencilPixel, ImageTexture, PixelFormat, RenderTexture},
+    uniform_binding::UniformBinding,
 };
 use wgpu::{
-    Adapter, Backends, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BlendState, Color, ColorTargetState, ColorWrites, CommandEncoder, CommandEncoderDescriptor, CompareFunction, DepthBiasState, DepthStencilState, Device, DeviceDescriptor, Extent3d, Face, Features, FragmentState, FrontFace, IndexFormat, Instance, InstanceDescriptor, MultisampleState, Operations, PipelineLayoutDescriptor, PolygonMode, PrimitiveState, PrimitiveTopology, Queue, RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipelineDescriptor, RequestAdapterOptions, ShaderModuleDescriptor, ShaderStages, StencilState, Surface, SurfaceConfiguration, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor, VertexState
+    Adapter, Backends, BindGroup, BindGroupDescriptor, BindGroupLayoutDescriptor, BlendState,
+    ColorTargetState, ColorWrites, CommandEncoder, CommandEncoderDescriptor, CompareFunction,
+    DepthBiasState, DepthStencilState, Device, DeviceDescriptor, Features, FragmentState,
+    FrontFace, Instance, InstanceDescriptor, MultisampleState, Operations,
+    PipelineLayoutDescriptor, PolygonMode, PrimitiveState, PrimitiveTopology, Queue,
+    RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
+    RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions, SamplerDescriptor, StencilFaceState, StencilState, Surface, TextureFormat, TextureView,
 };
 use winit::{
     application::ApplicationHandler,
+    dpi::{PhysicalSize, Size},
     event::WindowEvent,
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowAttributes},
@@ -25,9 +38,6 @@ struct App {
 }
 
 fn main() {
-    println!("{}", SampleVertex::shader_struct_str());
-    println!("{}", SampleInstance::shader_struct_str());
-
     let event_loop = EventLoop::new().unwrap();
 
     event_loop.set_control_flow(ControlFlow::Poll);
@@ -40,8 +50,12 @@ fn main() {
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         let window = event_loop
-            .create_window(WindowAttributes::default())
+            .create_window(
+                WindowAttributes::default()
+                    .with_min_inner_size(Size::Physical(PhysicalSize::new(64, 32))),
+            )
             .unwrap();
+        window.focus_window();
 
         self.ctx = Some(RenderContext::new(window));
     }
@@ -64,36 +78,40 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
+            WindowEvent::Resized(new_size) => {
+                let size = Vector2::new(new_size.width, new_size.height);
+
+                ctx.resize_surface(size);
+            }
             _ => (),
         }
     }
-}
 
-struct SampleSceneRenderer;
+    fn about_to_wait(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        let Some(ctx) = &mut self.ctx else {
+            return;
+        };
 
-impl RendererCreator for SampleSceneRenderer {
-    type State = ();
-
-    fn prepare(device: &Device, queue: &Queue) -> Self::State {
-        ()
-    }
-
-    fn render(encoder: &mut CommandEncoder, state: Self::State) {
-        println!("render sample!");
+        ctx.window.request_redraw();
     }
 }
 
 struct RenderContext {
     instance: Instance,
     window: Arc<Window>,
+    adapter: Adapter,
     surface: Surface<'static>,
+    depth_texture: RenderTexture<DepthStencilPixel, true>,
+    multisample_texture: RenderTexture<(), true>,
+    mesh_texture: ImageTexture,
     device: Device,
     queue: Queue,
+    start_time: Instant,
 }
 
 impl RenderContext {
     pub fn new(window: Window) -> Self {
-        let instance = Instance::new(&InstanceDescriptor {
+        let instance = Instance::new(InstanceDescriptor {
             backends: Backends::all(),
             ..Default::default()
         });
@@ -118,93 +136,132 @@ impl RenderContext {
         ))
         .unwrap();
 
+        let window_size = window.inner_size();
+        let window_size = Vector2::new(window_size.width, window_size.height);
+
         Self::configure_surface(&surface, &device, &adapter, &window);
+
+        let surface_format = Self::get_format(&surface, &adapter);
+
+        let depth_texture = RenderTexture::new(&device, window_size);
+        let multisample_texture = RenderTexture::new_format(&device, window_size, surface_format);
+
+        let mesh_texture =
+            ImageTexture::new_procedural(&device, &queue, Vector2::new(16, 16), |pos| {
+                if (pos.x + pos.y) % 2 == 0 {
+                    Color::BLACK
+                } else {
+                    Color::WHITE
+                }
+            });
 
         Self {
             window,
             instance,
+            adapter,
             surface,
+            depth_texture,
+            multisample_texture,
+            mesh_texture,
             device,
             queue,
+            start_time: Instant::now(),
         }
     }
 
     fn configure_surface(surface: &Surface, device: &Device, adapter: &Adapter, window: &Window) {
-        let caps = surface.get_capabilities(adapter);
-        let format = caps.formats.iter().filter(|format| format.is_srgb()).next().cloned().unwrap_or(caps.formats[0]);
-
         let size = window.inner_size();
 
-        surface.configure(
-            device,
-            &SurfaceConfiguration {
-                usage: TextureUsages::RENDER_ATTACHMENT,
-                format,
-                width: size.width,
-                height: size.height,
-                present_mode: caps.present_modes[0],
-                desired_maximum_frame_latency: 0,
-                alpha_mode: caps.alpha_modes[0],
-                view_formats: Vec::new(),
-            },
+        let config = surface
+            .get_default_config(adapter, size.width, size.height)
+            .unwrap();
+
+        surface.configure(device, &config);
+    }
+
+    fn get_format(surface: &Surface, adapter: &Adapter) -> TextureFormat {
+        surface.get_capabilities(adapter).formats[0]
+    }
+
+    fn resize_surface(&mut self, size: Vector2<u32>) {
+        self.surface.configure(
+            &self.device,
+            &self
+                .surface
+                .get_default_config(&self.adapter, size.x, size.y)
+                .unwrap(),
         );
+        self.depth_texture.resize(&self.device, size);
+        self.multisample_texture.resize(&self.device, size);
     }
 
     pub fn render(&mut self) {
-        let output = self.surface.get_current_texture().unwrap();
-        let view = output
-            .texture
-            .create_view(&TextureViewDescriptor::default());
+        let surface_texture = self.surface.get_current_texture().unwrap();
+        let output = RenderTexture::from_surface_texture(surface_texture);
 
-        let buffer = GpuBuffer::uniform(
+        // Create uniforms and bind groups
+
+        let sample_uniform = SampleUniform {
+            opacity: 0.9,
+            color_a: Vector3::new(1.0, 0.0, 0.5),
+            color_b: Vector3::new(0.2, 0.9, 0.4),
+        }
+        .buffer(&self.device);
+
+        let sample_uniform2 = GpuBuffer::uniform(
             &self.device,
             SampleUniform {
-                value: 2.0,
-                color: Vector3::new(1.0, 0.1, 0.8),
+                opacity: 0.0,
+                color_a: Vector3::new(0.4, 0.1, 1.0),
+                color_b: Vector3::new(0.1, 0.2, 0.6),
             },
         );
 
-        let depth_texture = self.device.create_texture(&TextureDescriptor {
-            label: Some("Depth texture"),
-            size: Extent3d {
-                width: output.texture.width(),
-                height: output.texture.height(),
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: TextureFormat::Depth24Plus,
-            usage: TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        });
+        let camera = Camera {
+            position: Vector3::new(0.0, 0.0, 2.0),
+            rotation: Basis3::one(),
+            fovy: Deg(90.0).into(),
+            screen_size: output.size().cast().unwrap(),
+        }
+        .uniform()
+        .buffer(&self.device);
 
-        let depth_view = depth_texture.create_view(&TextureViewDescriptor::default());
+        let sampler = self.device.create_sampler(&SamplerDescriptor::default());
+
+        let foo_uniforms = FooUniformsDerive {
+            sample: &sample_uniform,
+            camera: &camera,
+            texture: &self.mesh_texture,
+            tex_sampler: &sampler,
+        };
+
+        let foo_uniforms2 = FooUniformsDerive {
+            sample: &sample_uniform2,
+            camera: &camera,
+            texture: &self.mesh_texture,
+            tex_sampler: &sampler,
+        };
 
         let bind_group_layout = self
             .device
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some("Foo BindGroupLayout"),
-                entries: &[BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::VERTEX_FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
+                entries: FooUniformsDerive::LAYOUT,
             });
 
         let bind_group = self.device.create_bind_group(&BindGroupDescriptor {
             label: Some("Foo BindGroup"),
             layout: &bind_group_layout,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::Buffer(buffer.binding()),
-            }],
+            entries: &foo_uniforms.binding_entries(),
         });
+
+        let bind_group2 = self.device.create_bind_group(&BindGroupDescriptor {
+            label: Some("Foo BindGroup2"),
+            layout: &bind_group_layout,
+            entries: &foo_uniforms2.binding_entries(),
+        });
+
+        // Create pipeline layout
 
         let pipeline_layout = self
             .device
@@ -214,51 +271,60 @@ impl RenderContext {
                 push_constant_ranges: &[],
             });
 
-        let shader_module = self.device.create_shader_module(ShaderModuleDescriptor {
-            label: Some("ShaderModule"),
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Owned(sample_shader())),
-        });
+        let shader = sample_shader(&self.device);
 
         let render_pipeline = self
             .device
             .create_render_pipeline(&RenderPipelineDescriptor {
                 label: Some("Foo RenderPipeline"),
                 layout: Some(&pipeline_layout),
-                vertex: VertexState {
-                    module: &shader_module,
-                    entry_point: None,//Some("vert"),
-                    compilation_options: Default::default(),
-                    buffers: &[SampleVertex::LAYOUT, SampleInstance::LAYOUT],
-                },
+                vertex: shader.vertex_state(),
                 primitive: PrimitiveState {
                     topology: PrimitiveTopology::TriangleList,
                     strip_index_format: None,
                     front_face: FrontFace::Ccw,
-                    cull_mode: Some(Face::Back),
+                    cull_mode: None, // Some(Face::Back),
                     unclipped_depth: false,
                     polygon_mode: PolygonMode::Fill,
                     conservative: false,
                 },
                 depth_stencil: Some(DepthStencilState {
-                    format: depth_texture.format(),
+                    format: DepthStencilPixel::FORMAT,
                     depth_write_enabled: true,
                     depth_compare: CompareFunction::LessEqual,
-                    stencil: StencilState::default(),
+                    stencil: StencilState {
+                        front: StencilFaceState {
+                            compare: CompareFunction::GreaterEqual,
+                            fail_op: wgpu::StencilOperation::Keep,
+                            depth_fail_op: wgpu::StencilOperation::Keep,
+                            pass_op: wgpu::StencilOperation::Replace,
+                        },
+                        back: StencilFaceState {
+                            compare: CompareFunction::GreaterEqual,
+                            fail_op: wgpu::StencilOperation::Keep,
+                            depth_fail_op: wgpu::StencilOperation::Keep,
+                            pass_op: wgpu::StencilOperation::Replace,
+                        },
+                        read_mask: !0,
+                        write_mask: !0,
+                    },
                     bias: DepthBiasState::default(),
                 }),
-                multisample: MultisampleState::default(),
+                multisample: MultisampleState {
+                    count: 4,
+                    mask: !0,
+                    alpha_to_coverage_enabled: false,
+                },
                 fragment: Some(FragmentState {
-                    module: &shader_module,
-                    entry_point: None,//Some("frag"),
-                    compilation_options: Default::default(),
+                    module: &shader.module(),
+                    entry_point: Shader::<(), ()>::ENTRY_POINT_FRAGMENT,
                     targets: &[Some(ColorTargetState {
-                        format: output.texture.format(),
+                        format: output.format(),
                         blend: Some(BlendState::ALPHA_BLENDING),
                         write_mask: ColorWrites::ALL,
                     })],
                 }),
                 multiview: None,
-                cache: None,
             });
 
         let mut encoder = self
@@ -267,54 +333,167 @@ impl RenderContext {
                 label: Some("RenderContext::render"),
             });
 
+        let target = RenderTarget::MultisampleResolve {
+            multisample_color: &self.multisample_texture,
+            resolve_color: &output,
+            depth: Some(&self.depth_texture),
+        };
+
+        Self::render_pass(
+            &self.device,
+            &mut encoder,
+            target,
+            &render_pipeline,
+            &bind_group,
+            &bind_group2,
+            self.start_time,
+        );
+
+        self.queue.submit([encoder.finish()]);
+        output.present();
+    }
+
+    fn render_pass(
+        device: &Device,
+        encoder: &mut CommandEncoder,
+        target: RenderTarget<()>,
+        pipeline: &RenderPipeline,
+        bind_group: &BindGroup,
+        bind_group2: &BindGroup,
+        start_time: Instant,
+    ) {
+        let mesh = SampleVertex::sample_mesh(device);
+
+        let time = Instant::now();
+        let secs = time.duration_since(start_time).as_secs_f32();
+
+        let instance = GpuBuffer::instances(
+            device,
+            [SampleInstance {
+                mat: Matrix4::from_angle_y(Deg(secs * 180.0)),
+            }],
+        );
+
+        let instance2 = GpuBuffer::instances(
+            device,
+            [SampleInstance {
+                mat: Matrix4::from_translation(Vector3::new(0.0, 0.0, -5.0))
+                    * Matrix4::from_angle_y(Deg(secs * -90.0)),
+            }],
+        );
+
+        let instance3 = GpuBuffer::instances(
+            device,
+            [SampleInstance {
+                mat: Matrix4::from_translation(Vector3::new(0.0, (secs * 0.1).sin() * 15.0, -50.0))
+                    * Matrix4::from_scale(20.0)
+                    * Matrix4::from_angle_y(Deg(secs * 10.0)),
+            }],
+        );
+
         let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("Foo RenderPass"),
             color_attachments: &[Some(RenderPassColorAttachment {
-                view: &view,
-                resolve_target: None,
+                view: target.view(),
+                resolve_target: target.resolve_target(),
                 ops: Operations {
-                    load: wgpu::LoadOp::Clear(Color::BLACK),
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                     store: wgpu::StoreOp::Store,
                 },
             })],
-            depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                view: &depth_view,
+            depth_stencil_attachment: target.depth().map(|view| RenderPassDepthStencilAttachment {
+                view,
                 depth_ops: Some(Operations {
                     load: wgpu::LoadOp::Clear(1.0),
                     store: wgpu::StoreOp::Discard,
                 }),
-                stencil_ops: None,
+                stencil_ops: Some(Operations {
+                    load: wgpu::LoadOp::Clear(0),
+                    store: wgpu::StoreOp::Discard,
+                }),
             }),
             timestamp_writes: None,
             occlusion_query_set: None,
         });
 
-        pass.set_pipeline(&render_pipeline);
+        pass.set_pipeline(pipeline);
 
-        pass.set_bind_group(0, &bind_group, &[]);
 
-        let mesh = SampleVertex::sample_mesh(&self.device);
 
-        let instances = GpuBuffer::instances(
-            &self.device,
-            [SampleInstance {
-                mat: Matrix4::identity(),
-            }],
-        );
+        // draw big mesh in the far back
+        // pass.set_stencil_reference(2);
+        pass.set_bind_group(0, bind_group, &[]);
+        mesh.draw(&instance3, &mut pass);
 
-        mesh.draw(&instances, &mut pass);
+        // draw blue mesh in the back
+        pass.set_stencil_reference(2);
+        pass.set_bind_group(0, bind_group2, &[]);
+        mesh.draw(&instance2, &mut pass);
 
-        drop(pass);
-
-        self.queue.submit([encoder.finish()]);
-        output.present();
+        // draw rotating front mesh
+        pass.set_stencil_reference(1);
+        pass.set_bind_group(0, bind_group, &[]);
+        mesh.draw(&instance, &mut pass);
     }
 }
 
-trait RendererCreator {
-    type State;
+enum RenderTarget<'a, P> {
+    NonMultisample {
+        color: &'a RenderTexture<P, false>,
+        depth: Option<&'a RenderTexture<DepthStencilPixel, false>>,
+    },
 
-    fn prepare(device: &Device, queue: &Queue) -> Self::State;
+    Multisample {
+        color: &'a RenderTexture<P, true>,
+        depth: Option<&'a RenderTexture<DepthStencilPixel, true>>,
+    },
 
-    fn render(encoder: &mut CommandEncoder, state: Self::State);
+    MultisampleResolve {
+        multisample_color: &'a RenderTexture<P, true>,
+        resolve_color: &'a RenderTexture<P, false>,
+        depth: Option<&'a RenderTexture<DepthStencilPixel, true>>,
+    },
+}
+
+impl<'a, P> RenderTarget<'a, P> {
+    fn is_multisampled(&self) -> bool {
+        match self {
+            RenderTarget::NonMultisample { .. } => false,
+            RenderTarget::Multisample { .. } => true,
+            RenderTarget::MultisampleResolve { .. } => false,
+        }
+    }
+
+    fn view(&self) -> &TextureView {
+        match self {
+            RenderTarget::NonMultisample { color, .. } => color.view(),
+            RenderTarget::Multisample { color, .. } => color.view(),
+            RenderTarget::MultisampleResolve {
+                multisample_color, ..
+            } => multisample_color.view(),
+        }
+    }
+
+    fn resolve_target(&self) -> Option<&TextureView> {
+        match self {
+            RenderTarget::NonMultisample { .. } => None,
+            RenderTarget::Multisample { .. } => None,
+            RenderTarget::MultisampleResolve { resolve_color, .. } => Some(resolve_color.view()),
+        }
+    }
+
+    fn depth(&self) -> Option<&TextureView> {
+        match self {
+            RenderTarget::NonMultisample {
+                depth: Some(depth), ..
+            } => Some(depth.view()),
+            RenderTarget::Multisample {
+                depth: Some(depth), ..
+            } => Some(depth.view()),
+            RenderTarget::MultisampleResolve {
+                depth: Some(depth), ..
+            } => Some(depth.view()),
+            _ => None,
+        }
+    }
 }

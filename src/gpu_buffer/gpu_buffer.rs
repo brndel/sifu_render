@@ -7,7 +7,7 @@ use wgpu::{
 };
 
 pub struct GpuBuffer<T, B: BufferType> {
-    buffer: Buffer,
+    pub(super) buffer: Buffer,
     pub(super) extra: B::Extra,
     _phantom: PhantomData<(T, B)>,
 }

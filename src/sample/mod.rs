@@ -1,10 +1,12 @@
+use camera_uniform::FooUniformsDerive;
 use sample_vertex::{SampleInstance, SampleVertex};
+use wgpu::Device;
 
-use crate::shader::preprocess_shader;
+use crate::shader::Shader;
 
+pub mod camera_uniform;
 pub mod sample_vertex;
 
-
-pub fn sample_shader() -> String {
-    preprocess_shader::<SampleVertex, SampleInstance>(include_str!("sample_shader.wgsl"))
+pub fn sample_shader(device: &Device) -> Shader<SampleVertex, SampleInstance, FooUniformsDerive> {
+    Shader::new(device, include_str!("sample_shader.wgsl"))
 }

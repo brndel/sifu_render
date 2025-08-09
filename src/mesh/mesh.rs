@@ -19,12 +19,15 @@ impl<V: Vertex, const C: usize> Mesh<V, C> {
 }
 
 impl<V, const C: usize> Mesh<V, C> {
-    pub fn draw<I>(&self, instances: &GpuBuffer<I, InstanceBuf>, pass: &mut RenderPass)
-    where
+    pub fn draw<'a, I>(
+        &'a self,
+        instances: &'a GpuBuffer<I, InstanceBuf>,
+        pass: &mut RenderPass<'a>,
+    ) where
         I: MeshInstance<Vertex = V>,
     {
         pass.set_index_buffer(self.indices.slice(), self.indices.index_format());
-        
+
         // Vertices
         pass.set_vertex_buffer(0, self.vertices.slice());
         // Instance

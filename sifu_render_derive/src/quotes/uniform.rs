@@ -34,7 +34,9 @@ fn impl_uniform_quote<'a>(
     raw_ident: &Ident,
     fields: impl Iterator<Item = &'a RawField<WgslType<WgslScalar>>>,
 ) -> syn::Result<TokenStream> {
-    let shader_struct = match uniform_shader_struct_str(&ident.to_string(), fields) {
+    let shader_struct_name = &ident.to_string();
+
+    let shader_struct = match uniform_shader_struct_str(&shader_struct_name, fields) {
         Ok(value) => value,
         Err(err) => {
             return Err(syn::Error::new(
@@ -50,6 +52,10 @@ fn impl_uniform_quote<'a>(
 
             fn shader_struct_str() -> &'static str {
                 #shader_struct
+            }
+
+            fn shader_struct_name() -> &'static str {
+                #shader_struct_name
             }
         }
     })
@@ -116,7 +122,8 @@ fn raw_uniform_struct_quote(
 
     quote! {
         #[repr(C)]
-        #[derive(Debug, Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
+        #[derive(Debug, Clone, Copy, sifu_render::bytemuck::Zeroable, sifu_render::bytemuck::Pod)]
+        #[bytemuck(crate = "sifu_render::bytemuck")]
         pub struct #raw_ident {
             #(#raw_fields),*
         }

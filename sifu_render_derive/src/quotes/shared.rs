@@ -30,7 +30,8 @@ pub fn raw_struct_quote(
 
     quote! {
         #[repr(C)]
-        #[derive(Debug, Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
+        #[derive(Debug, Clone, Copy, sifu_render::bytemuck::Zeroable, sifu_render::bytemuck::Pod)]
+        #[bytemuck(crate = "sifu_render::bytemuck")]
         pub struct #raw_ident {
             #(#raw_fields,)*
         }
@@ -45,50 +46,6 @@ pub fn raw_struct_quote(
         }
     }
 }
-
-// pub fn raw_struct_quote_padded(ident: &Ident, raw_ident: &Ident, fields: &[RawField]) -> TokenStream {
-//     let padded_fields = PaddedRawField::iter(fields.iter());
-
-//     let raw_fields = padded_fields.clone().map(|field| {
-//         let ident = field.ident();
-//         let raw_type = field.ty();
-//         quote! {
-//             #ident: #raw_type
-//         }
-//     });
-
-//     let into_fields = padded_fields.map(|field| {
-//         let ident = field.ident();
-//         match &field {
-//             PaddedRawField::Field(_) => {
-//                 quote! {
-//                     #ident: value.#ident.into()
-//                 }
-//             },
-//             PaddedRawField::Padding { index: _ } => {
-//                 quote! {
-//                     #ident: 0
-//                 }
-//             },
-//         }
-//     });
-
-//     quote! {
-//         #[repr(C)]
-//         #[derive(Debug, Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
-//         pub struct #raw_ident {
-//             #(#raw_fields,)*
-//         }
-
-//         impl From<#ident> for #raw_ident {
-//             fn from(value: #ident) -> Self {
-//                 Self {
-//                     #(#into_fields),*
-//                 }
-//             }
-//         }
-//     }
-// }
 
 pub fn vertex_attributes_quote<'a>(
     fields: impl Iterator<Item = RepeatedRawField<'a, RustScalar>>,
@@ -178,7 +135,7 @@ pub fn uniform_shader_struct_str<'a>(name: &str, fields: impl Iterator<Item = &'
     writeln!(&mut out, "struct {} {{", name)?;
 
     for field in fields {
-        writeln!(&mut out, "  {}: {}", &field.ident, field.raw_ty.wgsl_type_str())?;
+        writeln!(&mut out, "  {}: {},", &field.ident, field.raw_ty.wgsl_type_str())?;
     }
 
     writeln!(&mut out, "}}")?;

@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 winit = "0.30.5"
-wgpu = "24"
+wgpu = "0.19"
 cgmath = "0.18"
 bytemuck = { version = "1.19.0", features = ["derive"] }
 
@@ -16,3 +16,9 @@ log = "0.4.22"
 
 
 sifu_render_derive.path = "./sifu_render_derive"
+
+image = { version = "0.25", optional = true }
+
+[features]
+default = ["image"]
+image = ["dep:image"]

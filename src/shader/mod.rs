@@ -1,2 +1,3 @@
-mod preprocess;
-pub use preprocess::preprocess_shader;
+mod shader;
+
+pub use shader::Shader;
