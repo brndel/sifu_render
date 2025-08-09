@@ -16,13 +16,7 @@ use sifu_render::{
     uniform_binding::UniformBinding,
 };
 use wgpu::{
-    Adapter, Backends, BindGroup, BindGroupDescriptor, BindGroupLayoutDescriptor, BlendState,
-    ColorTargetState, ColorWrites, CommandEncoder, CommandEncoderDescriptor, CompareFunction,
-    DepthBiasState, DepthStencilState, Device, DeviceDescriptor, Features, FragmentState,
-    FrontFace, Instance, InstanceDescriptor, MultisampleState, Operations,
-    PipelineLayoutDescriptor, PolygonMode, PrimitiveState, PrimitiveTopology, Queue,
-    RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
-    RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions, SamplerDescriptor, StencilFaceState, StencilState, Surface, TextureFormat, TextureView,
+    Adapter, Backends, BindGroup, BindGroupDescriptor, BindGroupLayoutDescriptor, BlendState, ColorTargetState, ColorWrites, CommandEncoder, CommandEncoderDescriptor, CompareFunction, DepthBiasState, DepthStencilState, Device, DeviceDescriptor, Features, FragmentState, FrontFace, Instance, InstanceDescriptor, MultisampleState, Operations, PipelineCompilationOptions, PipelineLayoutDescriptor, PolygonMode, PrimitiveState, PrimitiveTopology, Queue, RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions, SamplerDescriptor, StencilFaceState, StencilState, Surface, TextureFormat, TextureView
 };
 use winit::{
     application::ApplicationHandler,
@@ -111,7 +105,7 @@ struct RenderContext {
 
 impl RenderContext {
     pub fn new(window: Window) -> Self {
-        let instance = Instance::new(InstanceDescriptor {
+        let instance = Instance::new(&InstanceDescriptor {
             backends: Backends::all(),
             ..Default::default()
         });
@@ -132,7 +126,6 @@ impl RenderContext {
                 required_features: Features::empty(),
                 ..Default::default()
             },
-            None,
         ))
         .unwrap();
 
@@ -317,14 +310,16 @@ impl RenderContext {
                 },
                 fragment: Some(FragmentState {
                     module: &shader.module(),
-                    entry_point: Shader::<(), ()>::ENTRY_POINT_FRAGMENT,
+                    entry_point: Some(Shader::<(), ()>::ENTRY_POINT_FRAGMENT),
                     targets: &[Some(ColorTargetState {
                         format: output.format(),
                         blend: Some(BlendState::ALPHA_BLENDING),
                         write_mask: ColorWrites::ALL,
                     })],
+                    compilation_options: PipelineCompilationOptions::default()
                 }),
                 multiview: None,
+                cache: None,
             });
 
         let mut encoder = self
@@ -400,6 +395,7 @@ impl RenderContext {
                     load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                     store: wgpu::StoreOp::Store,
                 },
+                depth_slice: None,
             })],
             depth_stencil_attachment: target.depth().map(|view| RenderPassDepthStencilAttachment {
                 view,

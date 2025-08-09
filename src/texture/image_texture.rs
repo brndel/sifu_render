@@ -3,8 +3,7 @@ use std::marker::PhantomData;
 use bytemuck::cast_slice;
 use cgmath::Vector2;
 use wgpu::{
-    Device, Extent3d, ImageDataLayout, Queue, Texture, TextureDescriptor, TextureUsages,
-    TextureView, TextureViewDescriptor, util::DeviceExt,
+    util::DeviceExt, Device, Extent3d, Queue, TexelCopyBufferLayout, Texture, TextureDescriptor, TextureUsages, TextureView, TextureViewDescriptor
 };
 
 use super::{ColorPixel, PixelFormat, TextureRef};
@@ -75,7 +74,7 @@ impl<P: PixelFormat> ImageTexture<P> {
         queue.write_texture(
             self.texture.as_image_copy(),
             data,
-            ImageDataLayout {
+            TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(self.size.x * size_of::<P::Pixel>() as u32),
                 rows_per_image: Some(self.size.y),

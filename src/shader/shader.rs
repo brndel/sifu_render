@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use wgpu::{Device, ShaderModule, ShaderModuleDescriptor, VertexState};
+use wgpu::{Device, PipelineCompilationOptions, ShaderModule, ShaderModuleDescriptor, VertexState};
 
 use crate::{
     mesh::{MeshInstance, Vertex},
@@ -86,8 +86,9 @@ impl<V: Vertex, I: MeshInstance, U0, U1> Shader<V, I, U0, U1> {
     pub fn vertex_state(&self) -> VertexState {
         VertexState {
             module: &self.module,
-            entry_point: Self::ENTRY_POINT_VERTEX,
+            entry_point: Some(Self::ENTRY_POINT_VERTEX),
             buffers: &[V::LAYOUT, I::LAYOUT],
+            compilation_options: PipelineCompilationOptions::default(),
         }
     }
 }
