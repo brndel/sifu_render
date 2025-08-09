@@ -100,7 +100,6 @@ impl ImageTexture<ColorPixel> {
         Self::from_dynamic_img(device, queue, img)
     }
 
-    #[cfg(feature = "image")]
     pub fn load_image_from_memory(
         device: &Device,
         queue: &Queue,
